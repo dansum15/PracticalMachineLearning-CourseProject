@@ -1,0 +1,108 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Daniel Sumner"
+date: "January 28, 2017"
+output: html_document
+---
+
+## Synopsis
+
+The goal of the project is to create a machine-learning algorithm to predict the manner in which people did the barbell bicep curls. This is the "classe" variable in the training set. There five classes are defined as follows: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+When predicting, any of the other variables in the dataset may be used. The model will be used to predict 20 different test cases. 
+
+The training data is from the below:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data is from the below:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project comes from this original source: http://groupware.les.inf.puc-rio.br/har.
+
+## Step 1: Prepare Packages and Data Loading
+
+The following packages are necessary to be installed to run the analysis:
+
+```{r packages}
+library(caret)
+library(rattle)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+```
+
+The following reads the files from the above URLs and turn them into a testing and training dataset, setting the missing values as NA
+
+```{r datasets}
+training <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"), na.strings=c("NA","#DIV/0!",""))
+
+testing <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"), na.strings=c("NA","#DIV/0!",""))
+```
+
+Then subset the training dataset into a cleaner dataset that removes near zero values, then any column with NAs, then a random number identifier, and finally a time stamp.
+
+Then set the seed in order to replicate the analysis.
+
+Finally we will divide the training subset into a training dataset and a validation dataset in order to do cross validation.
+
+```{r subsets}
+trainingSub <- training[, names(training)[!(nzv(training, saveMetrics = T)[, 4])]]
+trainingSub <- trainingSub[, names(trainingSub)[sapply(trainingSub, function (x)! (any(is.na(x) | x == "")))]]
+trainingSub <- trainingSub[,-1]
+trainingSub <- trainingSub[,-4]
+
+set.seed(6791)
+inTrain <- createDataPartition(y=trainingSub$classe, p=0.6, list=FALSE)
+trainingSub_real <- trainingSub[inTrain, ]; trainingSub_val <- training[-inTrain, ]
+
+
+```
+
+## Model 1: Decision Tree
+
+The first model I will use to get a strong prediction will be decision trees. I will use the subsetted dataset to do so.
+
+```{r decision_trees}
+set.seed(6791)
+modFit_DT <- rpart(classe ~ ., data=trainingSub, method="class")
+
+print(modFit_DT)
+
+fancyRpartPlot(modFit_DT,cex=0.5)
+
+predictions_DT<-predict(modFit_DT,trainingSub_val,type ="class")
+confusionMatrix(predictions_DT,trainingSub_val$classe)
+
+```
+
+The end result of this model is 82.95% accuracy. Not that bad, but I believe we can get a stronger prediction. My next method will be trying a different prediction algorithm, Random Forests.
+
+## Model 2: Random Forests
+
+```{r random_forests}
+set.seed(6791)
+modFit_RF <- randomForest(classe ~. , data=trainingSub)
+
+predictions_RF<-predict(modFit_RF,trainingSub_val)
+confusionMatrix(predictions_RF,trainingSub_val$classe)
+
+varImp(modFit_RF)
+
+print(modFit_RF)
+```
+
+The random forest model is giving us a much stronger accurary (~100%) and works using cross validation as well. We are comfortable using this method for testing.
+
+##Final Testing using Random Forest Model
+
+```{r testing}
+predictions_test <- predict(modFit_RF,testing,type="class")
+
+predictions_test
+```
+
+##Conclusion
+
+The test was passed with a score of 20/20 or 100%!
